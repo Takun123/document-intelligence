@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+*.faiss
+data/
+.DS_Store
