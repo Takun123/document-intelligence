@@ -90,6 +90,101 @@ Document excerpts:
     except json.JSONDecodeError as e:
         return {"error": f"Failed to parse JSON: {e}", "raw_response": raw}
 
+def classify_clause(text):
+    """
+    Classify a clause as a binding obligation ('must_do') or a permission/
+    protection ('rights'), based on the modal verb it contains. Done in
+    plain code rather than by the LLM — keyword matching like this needs
+    to be 100% consistent, and asking the model to apply the same simple
+    rule by hand across a long list of clauses proved unreliable.
+    """
+    lowered = text.lower()
+
+    # Negation/permission signals checked first, since "shall not"
+    # contains "shall" as a substring — order matters here.
+    rights_signals = ["shall not", "will not", "is not", " may ", "free to", "is entitled to"]
+    must_do_signals = ["shall", "will"]
+
+    for signal in rights_signals:
+        if signal in lowered:
+            return "rights"
+
+    for signal in must_do_signals:
+        if signal in lowered:
+            return "must_do"
+
+    return "must_do"  # fallback if no modal verb is detected
+
+
+def identify_parties(vectorstore):
+    """
+    Identify every party to the document, their role, and every clause that
+    applies to them. The LLM's job is now just extraction and correct
+    attribution (which party a clause is actually about) — the must_do vs
+    rights split happens afterward in code via classify_clause(), since
+    that classification was more reliable as a keyword rule than as an
+    LLM judgment call.
+    """
+    chunks = retrieve_all_chunks(vectorstore)
+    context = format_context(chunks)
+
+    prompt = f"""Read the document excerpts below and identify every party to this document.
+
+Work through the document clause by clause, from beginning to end, so you don't skip anything.
+
+For each party, include:
+- "name" — their actual name if stated, or "Not specified" if the document only refers to them by role
+- "role" — their role or title as described in the document
+- "items" — every clause that describes something this party must do, may do, or is protected from, quoted or closely paraphrased, with the page number it was found on
+
+Before assigning a clause to a party, confirm who the grammatical subject of that clause actually is — pay close attention to pronouns (e.g. "she"/"her" may refer to one specific party even mid-sentence) and to sentences that mention both parties at once (e.g. one party needing the other's written consent). Attribute each clause only to the party it actually describes, never to a party simply mentioned nearby.
+
+Each clause should appear exactly once, under exactly one party.
+
+Return ONLY valid JSON with this exact structure, no markdown formatting, no commentary:
+{{
+  "parties": [
+    {{
+      "name": "...",
+      "role": "...",
+      "items": [{{"item": "...", "page": ...}}]
+    }}
+  ]
+}}
+
+Document excerpts:
+{context}
+"""
+
+    llm = get_llm()
+    response = llm.invoke(prompt)
+    raw = response.content.strip()
+
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return {"error": f"Failed to parse JSON: {e}", "raw_response": raw}
+
+    # Classify each extracted clause in code instead of relying on the LLM
+    for party in parsed.get("parties", []):
+        must_do = []
+        rights = []
+        for entry in party.pop("items", []):
+            if classify_clause(entry["item"]) == "must_do":
+                must_do.append(entry)
+            else:
+                rights.append(entry)
+        party["must_do"] = must_do
+        party["rights"] = rights
+
+    return parsed
+
 
 if __name__ == "__main__":
     from embeddings import load_vectorstore
@@ -102,3 +197,5 @@ if __name__ == "__main__":
     print("\n=== Extract Dates ===")
     print(json.dumps(extract_dates(vectorstore), indent=2))
 
+    print("\n=== Identify Parties ===")
+    print(json.dumps(identify_parties(vectorstore), indent=2))
