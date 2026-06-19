@@ -185,6 +185,57 @@ Document excerpts:
 
     return parsed
 
+def flag_risks(vectorstore):
+    """
+    Identify potential risks, red flags, or gaps in the document: blank or
+    unspecified terms, one-sided provisions, and protections that would
+    normally be expected but are missing entirely. Unlike the other
+    extraction features, this one requires judgment about what's NOT
+    written, not just what is.
+    """
+    chunks = retrieve_all_chunks(vectorstore)
+    context = format_context(chunks)
+
+    prompt = f"""Read the document excerpts below and identify potential risks, red flags, or concerns for someone relying on this document.
+
+Work through every section of the document methodically, including schedules, attachments, and signature blocks — not just the most visually obvious blanks. Less obvious gaps (e.g. an undefined scope of work, a blank effective date) matter just as much as prominent ones (e.g. a blank dollar amount).
+
+Look specifically for three categories of risk:
+1. "missing_information" — fields left blank or unspecified (e.g. missing dates, dollar amounts, names, or undefined duties/scope of work) where the missing information could cause confusion or disputes later.
+2. "one_sided_terms" — provisions that grant a right, protection, or remedy to one party in a situation where the other party doesn't have an equivalent right in the same situation (e.g. one party can terminate freely but the other cannot).
+3. "missing_protection" — a protection or clause you would normally expect in a document like this that is entirely absent (e.g. no dispute resolution process, no liability cap, no clearly defined scope of work).
+
+For each risk found, include:
+- "category" — one of: missing_information, one_sided_terms, missing_protection
+- "description" — what the issue is and why it matters
+- "page" — the page number where the issue appears, or null if the risk is the absence of something that doesn't appear anywhere in the document
+
+Return ONLY valid JSON with this exact structure, no markdown formatting, no commentary:
+{{
+  "risks": [
+    {{"category": "...", "description": "...", "page": ...}}
+  ]
+}}
+
+Document excerpts:
+{context}
+"""
+
+    llm = get_llm()
+    response = llm.invoke(prompt)
+    raw = response.content.strip()
+
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        return {"error": f"Failed to parse JSON: {e}", "raw_response": raw}
+
 
 if __name__ == "__main__":
     from embeddings import load_vectorstore
@@ -199,3 +250,6 @@ if __name__ == "__main__":
 
     print("\n=== Identify Parties ===")
     print(json.dumps(identify_parties(vectorstore), indent=2))
+
+    print("\n=== Flag Risks ===")
+    print(json.dumps(flag_risks(vectorstore), indent=2))
