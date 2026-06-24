@@ -138,7 +138,7 @@ document-intelligence/
 │   ├── evaluate.py        # RAGAS evaluation script
 │   └── evaluation_report.json
 ├── data/
-│   └── sample_docs/
+│   └── sample_docs/       # not tracked by git (see .gitignore)
 ├── .env.example
 ├── requirements.txt
 └── README.md
