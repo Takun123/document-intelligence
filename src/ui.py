@@ -1,151 +1,262 @@
 # src/ui.py
-# Phase 7a — Streamlit UI: sidebar + chat with citations
-# Extraction feature buttons will be wired in Phase 7b.
+# Phase 7b — Professional UI
 
 import streamlit as st
-from pathlib import Path
 import tempfile
 import os
 
-# ── Import our own modules ──────────────────────────────────────────────────
 from ingestion import load_document
 from chunking import chunk_document
 from embeddings import create_vectorstore
 from chain import ask_document
 from extraction import summarize_document, extract_dates, identify_parties, flag_risks
 
-# ── Page config — must be the very first Streamlit call ────────────────────
 st.set_page_config(
     page_title="DocuMind",
     page_icon="📄",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ── Custom CSS ──────────────────────────────────────────────────────────────
-# Streamlit's default styling is generic. This overrides it to look like
-# a real product. We inject raw CSS into the page using st.markdown.
 st.markdown("""
 <style>
-/* ---- Global ---- */
-html, body, [data-testid="stAppViewContainer"] {
-    background-color: #0F1117;
-    color: #E8E9F0;
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stAppViewBlockContainer"] {
+    background-color: #F7F8FA !important;
+    color: #1A1D23 !important;
 }
-
-[data-testid="stSidebar"] {
-    background-color: #1A1D2E;
-    border-right: 1px solid #2A2D3E;
+[data-testid="stAppViewBlockContainer"] {
+    padding: 0 !important;
+    max-width: 100% !important;
 }
-
-/* ---- Sidebar text ---- */
-[data-testid="stSidebar"] * {
-    color: #E8E9F0 !important;
+[data-testid="stHorizontalBlock"] {
+    gap: 0 !important;
+    align-items: stretch !important;
 }
-
-/* ---- Buttons ---- */
+[data-testid="stHorizontalBlock"] > div:first-child {
+    background-color: #FFFFFF !important;
+    border-right: 1px solid #E8EAED !important;
+    min-height: 100vh !important;
+    padding: 2rem 1.5rem !important;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.04) !important;
+}
+[data-testid="stHorizontalBlock"] > div:last-child {
+    background-color: #F7F8FA !important;
+    padding: 2rem 2.5rem 6rem 2.5rem !important;
+}
+.wordmark {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1A1D23;
+    letter-spacing: -0.02em;
+    margin-bottom: 2px;
+}
+.wordmark span { color: #4F46E5; }
+.wordmark-sub {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9CA3AF;
+    margin-bottom: 1.75rem;
+    font-weight: 500;
+}
+[data-testid="stFileUploader"] {
+    background-color: #F7F8FA !important;
+    border: 1.5px dashed #D1D5DB !important;
+    border-radius: 10px !important;
+}
+[data-testid="stFileUploader"]:hover { border-color: #4F46E5 !important; }
+[data-testid="stFileUploaderDropzone"] {
+    background-color: transparent !important;
+    padding: 0.6rem !important;
+}
+[data-testid="stFileUploaderDropzoneInstructions"] p {
+    font-size: 0.78rem !important;
+    color: #9CA3AF !important;
+}
+.doc-card {
+    background: linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%);
+    border: 1px solid #C7D2FE;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 12px 0 18px 0;
+    font-size: 0.82rem;
+}
+.doc-name {
+    color: #3730A3;
+    font-weight: 600;
+    font-size: 0.84rem;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+}
+.doc-meta { color: #6B7280; font-size: 0.76rem; }
+.status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    background-color: #10B981;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+.doc-card-empty {
+    background-color: #F9FAFB;
+    border: 1px dashed #E5E7EB;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 12px 0 18px 0;
+    color: #9CA3AF;
+    font-size: 0.8rem;
+    text-align: center;
+}
+.section-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #9CA3AF;
+    font-weight: 600;
+    margin: 20px 0 8px 0;
+}
 .stButton > button {
-    background-color: #1E2130;
-    color: #E8E9F0;
-    border: 1px solid #2A2D3E;
-    border-radius: 8px;
-    width: 100%;
-    transition: background-color 0.2s;
+    background-color: #FFFFFF !important;
+    color: #374151 !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 8px !important;
+    width: 100% !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    padding: 0.45rem 0.875rem !important;
+    text-align: left !important;
+    transition: all 0.15s ease !important;
+    margin-bottom: 5px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
 }
-.stButton > button:hover {
-    background-color: #2A2D3E;
-    border-color: #F59E0B;
-    color: #F59E0B;
+.stButton > button:hover:not(:disabled) {
+    background-color: #EEF2FF !important;
+    color: #4F46E5 !important;
+    border-color: #A5B4FC !important;
+    box-shadow: 0 1px 3px rgba(79,70,229,0.15) !important;
 }
-
-/* ---- Chat bubbles ---- */
-.bubble-wrapper {
+.stButton > button:active:not(:disabled) {
+    background-color: #E0E7FF !important;
+    transform: scale(0.99) !important;
+}
+.stButton > button:disabled {
+    opacity: 0.45 !important;
+    background-color: #F9FAFB !important;
+    color: #D1D5DB !important;
+    box-shadow: none !important;
+}
+.chat-header {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9CA3AF;
+    font-weight: 600;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #E8EAED;
+    margin-bottom: 20px;
+}
+.chat-empty {
     display: flex;
-    margin-bottom: 8px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 0;
+    color: #9CA3AF;
 }
-.bubble-wrapper.user {
-    justify-content: flex-end;
-}
-.bubble-wrapper.assistant {
-    justify-content: flex-start;
-}
+.chat-empty-icon { font-size: 2rem; margin-bottom: 12px; opacity: 0.4; }
+.chat-empty-text { font-size: 0.88rem; color: #B0B7C3; }
+.bubble-wrapper { display: flex; margin-bottom: 6px; }
+.bubble-wrapper.user { justify-content: flex-end; }
+.bubble-wrapper.assistant { justify-content: flex-start; }
 .bubble {
-    max-width: 75%;
-    padding: 12px 16px;
-    border-radius: 12px;
-    font-size: 0.95rem;
-    line-height: 1.6;
+    max-width: 76%;
+    padding: 11px 15px;
+    font-size: 0.875rem;
+    line-height: 1.65;
     white-space: pre-wrap;
 }
 .bubble.user {
-    background-color: #2A2D3E;
-    color: #E8E9F0;
-    border-bottom-right-radius: 2px;
+    background-color: #4F46E5;
+    color: #FFFFFF;
+    border-radius: 16px 16px 4px 16px;
 }
 .bubble.assistant {
-    background-color: #1E2130;
-    color: #E8E9F0;
-    border-bottom-left-radius: 2px;
+    background-color: #FFFFFF;
+    color: #1F2937;
+    border: 1px solid #E8EAED;
+    border-radius: 4px 16px 16px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
-
-/* ---- Citation badges ---- */
-.citations {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
-    margin-left: 4px;
-}
-.badge {
-    background-color: #2A1F00;
-    color: #F59E0B;
-    border: 1px solid #F59E0B44;
-    border-radius: 999px;
-    padding: 2px 10px;
-    font-size: 0.78rem;
+.citations { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0 14px 6px; }
+.cite-tag {
+    background-color: #EEF2FF;
+    color: #4338CA;
+    border: 1px solid #C7D2FE;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 0.71rem;
+    font-family: monospace;
     font-weight: 500;
 }
-
-/* ---- Status indicator ---- */
-.status-ready {
-    color: #34D399;
-    font-weight: 600;
-    font-size: 0.85rem;
+/* ── Chat input — fixed at bottom ── */
+[data-testid="stBottom"] {
+    background-color: #FFFFFF !important;
+    border-top: 1px solid #E8EAED !important;
+    padding: 14px 2.5rem !important;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.05) !important;
 }
-.status-processing {
-    color: #F59E0B;
-    font-weight: 600;
-    font-size: 0.85rem;
+[data-testid="stBottom"] > div { background-color: #FFFFFF !important; }
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div {
+    background-color: #FFFFFF !important;
+    border: none !important;
 }
-
-/* ---- Doc info card ---- */
-.doc-card {
-    background-color: #1E2130;
-    border: 1px solid #2A2D3E;
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin: 10px 0;
-    font-size: 0.88rem;
-    line-height: 1.8;
+[data-testid="stChatInputTextArea"] {
+    background-color: #F7F8FA !important;
+    color: #1A1D23 !important;
+    border: 1.5px solid #E5E7EB !important;
+    border-radius: 12px !important;
+    font-size: 0.875rem !important;
+    padding: 12px 16px !important;
 }
+[data-testid="stChatInputTextArea"]:focus {
+    border-color: #A5B4FC !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(165,180,252,0.25) !important;
 }
-
-/* ── Hide Streamlit branding ── */
-#MainMenu, footer, header {visibility: hidden;}
+[data-testid="stChatInputTextArea"]::placeholder { color: #C4C9D4 !important; }
+[data-testid="stChatInputSubmitButton"] svg { fill: #4F46E5 !important; }
+[data-testid="stSpinner"] p { color: #6B7280 !important; font-size: 0.82rem !important; }
+[data-testid="stAlert"] {
+    background-color: #EEF2FF !important;
+    border-color: #C7D2FE !important;
+    color: #3730A3 !important;
+    font-size: 0.82rem !important;
+    border-radius: 8px !important;
+}
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 3px; }
+#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stDecoration"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── Session state initialisation ────────────────────────────────────────────
-# These keys are checked every rerun. If they don't exist yet, create them.
-# This is how we persist data across reruns without using global variables.
+# ── Session state ─────────────────────────────────────────────────────────────
 def init_session():
     defaults = {
-        "messages": [],          # list of {"role": "user"|"assistant", "content": str, "sources": list}
-        "vectorstore": None,     # FAISS index, ready to query
-        "doc_info": None,        # {"filename": str, "pages": int}
-        "conversation_history": [],  # passed into ask_document() for memory
-        "processing": False,     # True while pipeline is running
+        "messages": [],
+        "vectorstore": None,
+        "doc_info": None,
+        "conversation_history": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -154,160 +265,97 @@ def init_session():
 init_session()
 
 
-# ── Helper: run the full ingestion pipeline ─────────────────────────────────
+# ── Pipeline ──────────────────────────────────────────────────────────────────
 def process_document(uploaded_file):
-    """
-    Takes a Streamlit UploadedFile object.
-    Saves it to a temp file, runs the full pipeline, stores the
-    vectorstore and doc info in session_state.
-    Returns True on success, False on error.
-    """
     try:
-        # Streamlit gives us a file-like object, not a path.
-        # PyMuPDF needs a real file path. We write to a temp file.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(uploaded_file.read())
             tmp_path = tmp.name
-
-        # Step 1 — parse PDF
-        doc = load_document(tmp_path)
-
-        # Step 2 — chunk
-        chunks = chunk_document(doc)
-
-        # Step 3 — embed + build vectorstore (this is the slow step, ~5-15s)
+        doc         = load_document(tmp_path)
+        chunks      = chunk_document(doc)
         vectorstore = create_vectorstore(chunks)
-
-        # Save results to session
-        st.session_state.vectorstore = vectorstore
-        st.session_state.doc_info = {
-            "filename": uploaded_file.name,
-            "pages": doc["pages"],
-        }
-        st.session_state.messages = []
+        st.session_state.vectorstore          = vectorstore
+        st.session_state.doc_info             = {"filename": uploaded_file.name, "pages": doc["pages"]}
+        st.session_state.messages             = []
         st.session_state.conversation_history = []
-
-        # Clean up temp file
         os.unlink(tmp_path)
         return True
-
     except Exception as e:
         st.error(f"Error processing document: {e}")
         return False
 
 
-# ── Helper: render a single message bubble ──────────────────────────────────
+# ── Render message ────────────────────────────────────────────────────────────
 def render_message(role: str, content: str, sources: list = None):
-    """
-    Renders one chat message as a styled HTML bubble.
-    If role is 'assistant' and sources is a non-empty list, renders
-    citation badges below the bubble.
-    """
-    bubble_html = f"""
-    <div class="bubble-wrapper {role}">
-        <div class="bubble {role}">{content}</div>
-    </div>
-    """
-    st.markdown(bubble_html, unsafe_allow_html=True)
-
-    # Citation badges — only for assistant messages with sources
+    st.markdown(
+        f'<div class="bubble-wrapper {role}"><div class="bubble {role}">{content}</div></div>',
+        unsafe_allow_html=True,
+    )
     if role == "assistant" and sources:
-        # Clean up: remove duplicates, sort, format as "Page N"
-        clean_sources = sorted(set(sources))
-        badges = "".join(
-            f'<span class="badge">Page {p}</span>' for p in clean_sources
-        )
-        st.markdown(
-            f'<div class="citations">{badges}</div>',
-            unsafe_allow_html=True
-        )
+        tags = "".join(f'<span class="cite-tag">p.{p}</span>' for p in sorted(set(sources)))
+        st.markdown(f'<div class="citations">{tags}</div>', unsafe_allow_html=True)
+
+
+# ── Format extraction ─────────────────────────────────────────────────────────
 def format_extraction_result(result: dict) -> str:
-    """
-    Converts extraction result dicts into clean, readable text.
-    Different layout per feature type, detected by the keys present.
-    """
     lines = []
-
-    # ── Summarize
     if "document_type" in result:
-        lines.append(f"**Type:** {result.get('document_type', '—')}")
-        lines.append(f"**Purpose:** {result.get('main_purpose', '—')}")
-        lines.append("")
-        lines.append("**Key Parties:**")
-        for p in result.get("key_parties", []):
-            lines.append(f"  • {p}")
-        lines.append("")
-        lines.append("**Key Points:**")
-        for kp in result.get("key_points", []):
-            lines.append(f"  • {kp}")
+        lines += [f"**Type:** {result.get('document_type','—')}",
+                  f"**Purpose:** {result.get('main_purpose','—')}", "", "**Key Parties:**"]
+        for p in result.get("key_parties", []): lines.append(f"  • {p}")
+        lines += ["", "**Key Points:**"]
+        for kp in result.get("key_points", []): lines.append(f"  • {kp}")
         if result.get("deadlines"):
-            lines.append("")
-            lines.append("**Deadlines mentioned:**")
-            for d in result["deadlines"]:
-                lines.append(f"  • {d}")
-
-    # ── Extract Dates
+            lines += ["", "**Deadlines:**"]
+            for d in result["deadlines"]: lines.append(f"  • {d}")
     elif "absolute_dates" in result:
         if result.get("absolute_dates"):
             lines.append("**Calendar Dates:**")
             for item in result["absolute_dates"]:
-                page = f"  *(Page {item.get('page', '?')})*" if item.get('page') else ""
-                lines.append(f"  • {item.get('date', '—')} — {item.get('description', '—')}{page}")
+                pg = f" *(p.{item.get('page')})*" if item.get('page') else ""
+                lines.append(f"  • {item.get('date','—')} — {item.get('description','—')}{pg}")
         if result.get("relative_deadlines"):
-            lines.append("")
-            lines.append("**Relative Deadlines:**")
+            lines += ["", "**Relative Deadlines:**"]
             for item in result["relative_deadlines"]:
-                page = f"  *(Page {item.get('page', '?')})*" if item.get('page') else ""
-                lines.append(f"  • {item.get('deadline', '—')} — {item.get('description', '—')}{page}")
-
-    # ── Identify Parties
+                pg = f" *(p.{item.get('page')})*" if item.get('page') else ""
+                lines.append(f"  • {item.get('deadline','—')} — {item.get('description','—')}{pg}")
     elif "parties" in result:
         for party in result.get("parties", []):
-            lines.append(f"**{party.get('name', '—')}** — {party.get('role', '—')}")
+            lines.append(f"**{party.get('name','—')}** — {party.get('role','—')}")
             if party.get("must_do"):
                 lines.append("  *Obligations:*")
                 for item in party["must_do"]:
-                    page = f" *(Page {item.get('page', '?')})*" if item.get('page') else ""
-                    lines.append(f"    • {item.get('item', '—')}{page}")
+                    pg = f" *(p.{item.get('page')})*" if item.get('page') else ""
+                    lines.append(f"    • {item.get('item','—')}{pg}")
             if party.get("rights"):
                 lines.append("  *Rights:*")
                 for item in party["rights"]:
-                    page = f" *(Page {item.get('page', '?')})*" if item.get('page') else ""
-                    lines.append(f"    • {item.get('item', '—')}{page}")
+                    pg = f" *(p.{item.get('page')})*" if item.get('page') else ""
+                    lines.append(f"    • {item.get('item','—')}{pg}")
             lines.append("")
-
-    # ── Flag Risks
     elif "risks" in result:
-        categories = {
-            "missing_information": "⚠️ Missing Information",
-            "one_sided_terms":     "⚖️ One-Sided Terms",
-            "missing_protection":  "🛡️ Missing Protections",
-        }
-        for key, label in categories.items():
-            items = [r for r in result.get("risks", []) if r.get("category") == key]
+        for key, label in [("missing_information","Missing Information"),
+                           ("one_sided_terms","One-Sided Terms"),
+                           ("missing_protection","Missing Protections")]:
+            items = [r for r in result.get("risks",[]) if r.get("category") == key]
             if items:
                 lines.append(f"**{label}:**")
                 for item in items:
-                    page = f" *(Page {item.get('page')})*" if item.get('page') else ""
-                    lines.append(f"  • {item.get('description', '—')}{page}")
+                    pg = f" *(p.{item.get('page')})*" if item.get('page') else ""
+                    lines.append(f"  • {item.get('description','—')}{pg}")
                 lines.append("")
-
     return "\n".join(lines) if lines else "No data extracted."
 
-# ── MAIN LAYOUT — two columns instead of collapsible sidebar ────────────────
+
+# ── Layout ────────────────────────────────────────────────────────────────────
 left, right = st.columns([1, 3])
 
-# ── LEFT COLUMN (was sidebar) ───────────────────────────────────────────────
+# ── LEFT PANEL ────────────────────────────────────────────────────────────────
 with left:
-    st.markdown("## 📄 DocuMind")
-    st.markdown("*Business document intelligence*")
-    st.divider()
+    st.markdown('<div class="wordmark">Docu<span>Mind</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="wordmark-sub">Document Intelligence</div>', unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader(
-        "Upload a PDF document",
-        type=["pdf"],
-        label_visibility="collapsed",
-    )
+    uploaded_file = st.file_uploader("Upload PDF", type=["pdf"], label_visibility="collapsed")
 
     if uploaded_file is not None:
         already_loaded = (
@@ -315,104 +363,108 @@ with left:
             and st.session_state.doc_info["filename"] == uploaded_file.name
         )
         if not already_loaded:
-            with st.spinner("Analysing document..."):
-                success = process_document(uploaded_file)
-            if success:
-                st.success("Document ready.")
+            with st.spinner("Processing document..."):
+                process_document(uploaded_file)
 
     if st.session_state.doc_info:
         info = st.session_state.doc_info
         st.markdown(f"""
         <div class="doc-card">
-            <b>📋 {info['filename']}</b><br>
-            Pages: {info['pages']}<br>
-            <span class="status-ready">● Ready</span>
+            <span class="doc-name">{info['filename']}</span>
+            <span class="doc-meta">{info['pages']} pages &nbsp;·&nbsp; <span class="status-dot"></span>ready</span>
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.markdown("""
-        <div class="doc-card">
-            No document loaded.<br>
-            <span class="status-processing">Upload a PDF to begin.</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="doc-card-empty">No document loaded</div>', unsafe_allow_html=True)
 
-    st.divider()
+    doc_ready = st.session_state.doc_info is not None
 
-    st.markdown("**Extract from document**")
-    st.caption("Available once a document is loaded.")
+    st.markdown('<div class="section-label">Extract</div>', unsafe_allow_html=True)
+    btn_summarize = st.button("📋  Summarize document", disabled=not doc_ready)
+    btn_dates     = st.button("📅  Dates & deadlines",  disabled=not doc_ready)
+    btn_parties   = st.button("👤  Parties involved",   disabled=not doc_ready)
+    btn_risks     = st.button("⚠️  Flag risk clauses",  disabled=not doc_ready)
 
-    btn_summarize = st.button("📋 Summarize", disabled=st.session_state.doc_info is None)
-btn_dates     = st.button("📅 Dates",     disabled=st.session_state.doc_info is None)
-btn_parties   = st.button("👥 Parties",   disabled=st.session_state.doc_info is None)
-btn_risks     = st.button("⚠️ Risks",     disabled=st.session_state.doc_info is None)
-
-# ── Handle extraction button clicks
-if btn_summarize:
-    with st.spinner("Summarizing..."):
-        result = summarize_document(st.session_state.vectorstore)
-    msg = f"**📋 Document Summary**\n\n{format_extraction_result(result)}"
-    st.session_state.messages.append({"role": "assistant", "content": msg, "sources": []})
-    st.rerun()
-
-if btn_dates:
-    with st.spinner("Extracting dates..."):
-        result = extract_dates(st.session_state.vectorstore)
-    msg = f"**📅 Dates & Deadlines**\n\n{format_extraction_result(result)}"
-    st.session_state.messages.append({"role": "assistant", "content": msg, "sources": []})
-    st.rerun()
-
-if btn_parties:
-    with st.spinner("Identifying parties..."):
-        result = identify_parties(st.session_state.vectorstore)
-    msg = f"**👥 Parties Involved**\n\n{format_extraction_result(result)}"
-    st.session_state.messages.append({"role": "assistant", "content": msg, "sources": []})
-    st.rerun()
-
-if btn_risks:
-    with st.spinner("Flagging risks..."):
-        result = flag_risks(st.session_state.vectorstore)
-    msg = f"**⚠️ Risk Flags**\n\n{format_extraction_result(result)}"
-    st.session_state.messages.append({"role": "assistant", "content": msg, "sources": []})
-    st.rerun()
-
-    st.divider()
-
-    if st.button("🗑 Clear session", disabled=st.session_state.doc_info is None):
+    st.markdown('<div class="section-label" style="margin-top:24px;">Session</div>', unsafe_allow_html=True)
+    if st.button("🗑  Clear session", disabled=not doc_ready):
         for key in ["messages", "vectorstore", "doc_info", "conversation_history"]:
             st.session_state[key] = [] if key in ["messages", "conversation_history"] else None
         st.rerun()
 
-# ── RIGHT COLUMN (main chat area) ───────────────────────────────────────────
+
+# ── RIGHT PANEL ───────────────────────────────────────────────────────────────
 with right:
-    st.markdown("### Chat with your document")
+    st.markdown('<div class="chat-header">Conversation</div>', unsafe_allow_html=True)
 
-    for msg in st.session_state.messages:
-        render_message(msg["role"], msg["content"], msg.get("sources"))
+    if not st.session_state.messages:
+        st.markdown("""
+        <div class="chat-empty">
+            <div class="chat-empty-icon">💬</div>
+            <div class="chat-empty-text">Upload a document and ask anything about it.</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        for msg in st.session_state.messages:
+            render_message(msg["role"], msg["content"], msg.get("sources"))
 
-    doc_ready = st.session_state.doc_info is not None
-    placeholder = "Ask anything about the document..." if doc_ready else "Upload a document to begin."
+    # Spinner slot — visible in the chat area, not buried in the left panel
+    chat_status = st.empty()
 
-    user_input = st.chat_input(placeholder, disabled=not doc_ready)
-
-    if user_input and doc_ready:
-        render_message("user", user_input)
-        st.session_state.messages.append({"role": "user", "content": user_input, "sources": []})
-
-        with st.spinner("Thinking..."):
-            result = ask_document(
-                question=user_input,
-                vectorstore=st.session_state.vectorstore,
-                chat_history=st.session_state.conversation_history,
-)
-
-        answer  = result["answer"]
-        sources = result.get("sources", [])
-        st.session_state.conversation_history = result.get("conversation_history", [])
-
+    if btn_summarize:
+        with chat_status.status("Summarizing document...", expanded=True):
+            result = summarize_document(st.session_state.vectorstore)
         st.session_state.messages.append({
             "role": "assistant",
-            "content": answer,
-            "sources": sources,
+            "content": f"**Document Summary**\n\n{format_extraction_result(result)}",
+            "sources": [],
         })
-        render_message("assistant", answer, sources)
+        st.rerun()
+
+    if btn_dates:
+        with chat_status.status("Extracting dates & deadlines...", expanded=True):
+            result = extract_dates(st.session_state.vectorstore)
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": f"**Dates & Deadlines**\n\n{format_extraction_result(result)}",
+            "sources": [],
+        })
+        st.rerun()
+
+    if btn_parties:
+        with chat_status.status("Identifying parties...", expanded=True):
+            result = identify_parties(st.session_state.vectorstore)
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": f"**Parties Involved**\n\n{format_extraction_result(result)}",
+            "sources": [],
+        })
+        st.rerun()
+
+    if btn_risks:
+        with chat_status.status("Flagging risk clauses...", expanded=True):
+            result = flag_risks(st.session_state.vectorstore)
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": f"**Risk Flags**\n\n{format_extraction_result(result)}",
+            "sources": [],
+        })
+        st.rerun()
+
+
+# ── Chat input — outside columns so it anchors to page bottom ─────────────────
+placeholder = "Ask anything about the document..." if doc_ready else "Upload a document to begin."
+user_input = st.chat_input(placeholder, disabled=not doc_ready)
+
+if user_input and doc_ready:
+    st.session_state.messages.append({"role": "user", "content": user_input, "sources": []})
+    with st.spinner("Thinking..."):
+        result = ask_document(
+            question=user_input,
+            vectorstore=st.session_state.vectorstore,
+            chat_history=st.session_state.conversation_history,
+        )
+    answer  = result["answer"]
+    sources = result.get("sources", [])
+    st.session_state.conversation_history = result.get("conversation_history", [])
+    st.session_state.messages.append({"role": "assistant", "content": answer, "sources": sources})
+    st.rerun()
