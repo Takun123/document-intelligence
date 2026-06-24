@@ -2,7 +2,7 @@
 
 A RAG-powered web application that lets you chat with any business document, extract structured data, and identify risks — all grounded in the document with page citations.
 
-**Live demo:** _coming soon_
+**Live demo:** https://document-intelligence-zdxuwgyycxz7bqsyndf7nk.streamlit.app
 
 ---
 
