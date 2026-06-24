@@ -1,0 +1,70 @@
+{
+  "model": "gpt-4o-mini",
+  "document": "sample_contract.pdf",
+  "num_questions": 10,
+  "scores": {
+    "faithfulness": 0.75,
+    "answer_relevancy": 0.839,
+    "context_precision": 0.8583,
+    "context_recall": 1.0,
+    "overall_average": 0.8618
+  },
+  "targets": {
+    "faithfulness": 0.85,
+    "answer_relevancy": 0.8,
+    "context_precision": 0.75,
+    "context_recall": 0.7
+  },
+  "per_question": [
+    {
+      "question": "What is the legal relationship between the Committee and the Contractor?",
+      "answer": "The legal relationship between the Committee and the Contractor is that of an independent contractor. The Agreement specifies that the Contractor is not an employee, partner, agent, or joint venturer of the Committee, and the Committee is not responsible for withholding taxes related to the Contractor's compensation. The Contractor will not receive employee benefits such as vacation pay, sick leave, or health benefits (Page 2).",
+      "ground_truth": "The Contractor is engaged as an independent contractor, not as an employee, partner, agent, or joint venturer of the Committee."
+    },
+    {
+      "question": "When does the engagement end?",
+      "answer": "The engagement shall continue in full force and effect through January 15, 2004, or earlier upon completion of the Contractor\u2019s duties under this Agreement. The Agreement may only be extended thereafter by mutual agreement, unless terminated earlier by operation of and in accordance with this Agreement (Page 3).",
+      "ground_truth": "The engagement continues through January 15, 2004, or earlier upon completion of the Contractor's duties, unless terminated earlier or extended by mutual agreement."
+    },
+    {
+      "question": "What is the Contractor's hourly rate?",
+      "answer": "The Contractor's hourly rate is not specified in the excerpts provided; it is indicated as \"________ per hour\" (Page 3).",
+      "ground_truth": "The hourly rate is not specified \u2014 it is left blank in Schedule A to be filled in."
+    },
+    {
+      "question": "How can the Committee terminate this Agreement normally?",
+      "answer": "The Committee can terminate this Agreement normally by providing 10 working days\u2019 written notice to the Contractor (Page 1).",
+      "ground_truth": "The Committee can terminate the Agreement by giving 10 working days' written notice to the Contractor."
+    },
+    {
+      "question": "Under what conditions can the Committee terminate immediately without notice?",
+      "answer": "The Committee can terminate the engagement of the Contractor immediately and without prior written notice if the Contractor is convicted of any crime or offense, fails or refuses to comply with the written policies or reasonable directives of the Committee, is guilty of serious misconduct in connection with performance, or materially breaches provisions of the Agreement (Page 1).",
+      "ground_truth": "If the Contractor is convicted of a crime, fails to comply with written policies, is guilty of serious misconduct, or materially breaches the Agreement."
+    },
+    {
+      "question": "Is the Contractor allowed to work for other clients during this engagement?",
+      "answer": "Yes, the Contractor is expressly free to perform services for other parties while performing services for the Committee (Page 1).",
+      "ground_truth": "Yes, the Contractor is expressly free to perform services for other parties while performing services for the Committee."
+    },
+    {
+      "question": "Who is responsible for the Contractor's taxes?",
+      "answer": "The Committee shall not be responsible for withholding taxes with respect to the Contractor\u2019s compensation hereunder (Page 2).",
+      "ground_truth": "The Committee is not responsible for withholding taxes on the Contractor's compensation. The Contractor bears that responsibility."
+    },
+    {
+      "question": "Can the Contractor assign her rights or delegate her duties to someone else?",
+      "answer": "No, the Contractor shall not assign any of her rights under this Agreement, or delegate the performance of any of her duties hereunder, without the prior written consent of the Committee (Page 2).",
+      "ground_truth": "No, the Contractor cannot assign rights or delegate duties without the prior written consent of the Committee."
+    },
+    {
+      "question": "When must the Committee pay the Contractor's invoices?",
+      "answer": "The Committee must pay the Contractor's invoices within 30 days of receipt of the Contractor\u2019s monthly invoice for services rendered, supported by reasonable documentation (Page 3).",
+      "ground_truth": "Payment is due within 30 days of receipt of the Contractor's monthly invoice, supported by reasonable documentation."
+    },
+    {
+      "question": "What happens if one clause of the Agreement is found invalid?",
+      "answer": "If any provision of the Agreement, or any portion thereof, is held to be invalid and unenforceable, then the remainder of the Agreement shall nevertheless remain in full force and effect (Page 2).",
+      "ground_truth": "The rest of the Agreement remains in full force and effect. An invalid clause does not void the entire contract."
+    }
+  ]
+}
