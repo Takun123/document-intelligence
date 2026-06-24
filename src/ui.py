@@ -1,15 +1,9 @@
 # src/ui.py
-# Phase 7b — Professional UI
+# Phase 9 — Deployment ready (API key input added)
 
 import streamlit as st
 import tempfile
 import os
-
-from ingestion import load_document
-from chunking import chunk_document
-from embeddings import create_vectorstore
-from chain import ask_document
-from extraction import summarize_document, extract_dates, identify_parties, flag_risks
 
 st.set_page_config(
     page_title="DocuMind",
@@ -62,6 +56,18 @@ html, body,
     margin-bottom: 1.75rem;
     font-weight: 500;
 }
+/* ── API key banner ── */
+.api-banner {
+    background: linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%);
+    border: 1px solid #C7D2FE;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 1.25rem;
+    font-size: 0.82rem;
+    color: #3730A3;
+    line-height: 1.6;
+}
+.api-banner strong { font-weight: 600; }
 [data-testid="stFileUploader"] {
     background-color: #F7F8FA !important;
     border: 1.5px dashed #D1D5DB !important;
@@ -204,7 +210,6 @@ html, body,
     font-family: monospace;
     font-weight: 500;
 }
-/* ── Chat input — fixed at bottom ── */
 [data-testid="stBottom"] {
     background-color: #FFFFFF !important;
     border-top: 1px solid #E8EAED !important;
@@ -248,6 +253,72 @@ html, body,
 [data-testid="stDecoration"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ── API key gate — must happen before any OpenAI import ──────────────────────
+# On Streamlit Cloud there is no .env file, so we rely on the user providing
+# their key via the input below, or on the OPENAI_API_KEY secret if set by
+# the app owner for a private deployment.
+
+def get_api_key() -> str:
+    """Return the active OpenAI API key, preferring env over session input."""
+    return os.environ.get("OPENAI_API_KEY", st.session_state.get("api_key", ""))
+
+if "api_key" not in st.session_state:
+    st.session_state["api_key"] = os.environ.get("OPENAI_API_KEY", "")
+
+# Show the key input only when no key is set yet
+if not st.session_state["api_key"]:
+    st.markdown("""
+    <div style="max-width:520px; margin: 4rem auto; text-align:center;">
+        <div style="font-size:1.5rem; font-weight:700; color:#1A1D23; margin-bottom:6px;">
+            Docu<span style="color:#4F46E5;">Mind</span>
+        </div>
+        <div style="font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase;
+                    color:#9CA3AF; margin-bottom:2rem;">Document Intelligence</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("""
+        <div style="background:#FFFFFF; border:1px solid #E8EAED; border-radius:12px;
+                    padding:2rem; box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+            <div style="font-size:0.95rem; font-weight:600; color:#1A1D23; margin-bottom:6px;">
+                Enter your OpenAI API key
+            </div>
+            <div style="font-size:0.8rem; color:#6B7280; margin-bottom:1.25rem; line-height:1.6;">
+                Your key is used only for this session and never stored.
+                Get one at <a href="https://platform.openai.com/api-keys"
+                style="color:#4F46E5;">platform.openai.com</a>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        key_input = st.text_input(
+            "OpenAI API Key",
+            type="password",
+            placeholder="sk-...",
+            label_visibility="collapsed",
+        )
+        if st.button("Start using DocuMind", use_container_width=True):
+            if key_input.startswith("sk-"):
+                st.session_state["api_key"] = key_input
+                os.environ["OPENAI_API_KEY"] = key_input
+                st.rerun()
+            else:
+                st.error("That doesn't look like a valid OpenAI key. It should start with sk-")
+    st.stop()
+
+# Key is set — make sure the env var is populated for all downstream modules
+os.environ["OPENAI_API_KEY"] = st.session_state["api_key"]
+
+# Now safe to import OpenAI-dependent modules
+from ingestion import load_document
+from chunking import chunk_document
+from embeddings import create_vectorstore
+from chain import ask_document
+from extraction import summarize_document, extract_dates, identify_parties, flag_risks
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
@@ -391,6 +462,13 @@ with left:
             st.session_state[key] = [] if key in ["messages", "conversation_history"] else None
         st.rerun()
 
+    # Allow switching API key
+    st.markdown('<div class="section-label" style="margin-top:24px;">API Key</div>', unsafe_allow_html=True)
+    if st.button("🔑  Change API key"):
+        st.session_state["api_key"] = ""
+        os.environ.pop("OPENAI_API_KEY", None)
+        st.rerun()
+
 
 # ── RIGHT PANEL ───────────────────────────────────────────────────────────────
 with right:
@@ -407,7 +485,6 @@ with right:
         for msg in st.session_state.messages:
             render_message(msg["role"], msg["content"], msg.get("sources"))
 
-    # Spinner slot — visible in the chat area, not buried in the left panel
     chat_status = st.empty()
 
     if btn_summarize:
@@ -451,7 +528,7 @@ with right:
         st.rerun()
 
 
-# ── Chat input — outside columns so it anchors to page bottom ─────────────────
+# ── Chat input ────────────────────────────────────────────────────────────────
 placeholder = "Ask anything about the document..." if doc_ready else "Upload a document to begin."
 user_input = st.chat_input(placeholder, disabled=not doc_ready)
 
